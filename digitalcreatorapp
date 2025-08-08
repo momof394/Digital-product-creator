@@ -1,0 +1,72 @@
+from flask import Flask, request, render_template_string, send_file
+from io import BytesIO
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from transformers import pipeline  # Free AI for text generation
+
+app = Flask(__name__)
+
+# Initialize AI (GPT-2 model - simple and free)
+generator = pipeline('text-generation', model='gpt2')
+
+# HTML template with visual preview
+HTML_TEMPLATE = '''
+<!doctype html>
+<html>
+<head>
+    <title>Digital Product Creator</title>
+    <style>
+        body { font-family: Arial; background: #f0f8ff; text-align: center; padding: 20px; }
+        h1 { color: #4CAF50; }
+        form { max-width: 600px; margin: auto; }
+        textarea { width: 100%; height: 100px; padding: 10px; margin: 10px 0; border: 1px solid #ddd; }
+        button { background: #4CAF50; color: white; padding: 10px 20px; border: none; cursor: pointer; }
+        #preview { max-width: 600px; margin: 20px auto; padding: 20px; border: 1px solid #ddd; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <h1>Create Custom Digital Products</h1>
+    <p>Enter a prompt (e.g., "Motivational planner for busy parents") and generate!</p>
+    <form method="post" action="/generate">
+        <textarea name="prompt" placeholder="Your idea here..." required></textarea>
+        <button type="submit">Generate</button>
+    </form>
+    {% if content %}
+    <div id="preview">
+        <h2>Preview Your Product</h2>
+        <p>{{ content }}</p>
+        <a href="/download?prompt={{ prompt }}"><button>Download as PDF</button></a>
+        <p><em>Premium features coming soon for passive income upsells!</em></p>
+    </div>
+    {% endif %}
+</body>
+</html>
+'''
+
+@app.route('/', methods=['GET', 'POST'])
+def home():
+    return render_template_string(HTML_TEMPLATE, content=None)
+
+@app.route('/generate', methods=['POST'])
+def generate():
+    prompt = request.form['prompt']
+    try:
+        generated = generator(prompt, max_length=250, num_return_sequences=1)[0]['generated_text']
+    except Exception as e:
+        generated = f"Error: {str(e)}. Try a simpler prompt!"
+    return render_template_string(HTML_TEMPLATE, content=generated, prompt=prompt)
+
+@app.route('/download')
+def download():
+    prompt = request.args.get('prompt', 'Default Prompt')
+    buffer = BytesIO()
+    p = canvas.Canvas(buffer, pagesize=letter)
+    p.drawString(100, 750, "Your Custom Digital Product")
+    p.drawString(100, 700, f"Based on: {prompt}")
+    p.drawString(100, 650, "Generated Content: (Add your text here in full version)")
+    p.save()
+    buffer.seek(0)
+    return send_file(buffer, as_attachment=True, download_name='digital_product.pdf', mimetype='application/pdf')
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080)
